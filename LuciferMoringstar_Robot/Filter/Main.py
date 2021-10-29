@@ -1,287 +1,373 @@
-import re
-import logging
-import asyncio
-
+# (c) PR0FESS0R-99
+from Config import AUTH_CHANNEL, AUTH_USERS, CUSTOM_FILE_CAPTION, API_KEY, AUTH_GROUPS, TUTORIAL
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-from pyrogram.errors import ButtonDataInvalid, FloodWait
+import re
+from pyrogram.errors import UserNotParticipant
+from LuciferMoringstar_Robot import get_filter_results, get_file_details, is_subscribed, get_poster
+from LuciferMoringstar_Robot import RATING, GENRES, HELP, ABOUT
+import random
+BUTTONS = {}
+BOT = {}
 
-from bot.database import Database # pylint: disable=import-error
-from bot.bot import Bot # pylint: disable=import-error
-
-
-FIND = {}
-INVITE_LINK = {}
-ACTIVE_CHATS = {}
-db = Database()
-
-@Bot.on_message(filters.text & filters.group & ~filters.bot, group=0)
-async def auto_filter(bot, update):
-    """
-    A Funtion To Handle Incoming Text And Reply With Appropriate Results
-    """
-    group_id = update.chat.id
-
-    if re.findall(r"((^\/|^,|^\.|^[\U0001F600-\U000E007F]).*)", update.text):
+@Client.on_message(filters.text & filters.private & filters.incoming & filters.user(AUTH_USERS) if AUTH_USERS else filters.text & filters.private & filters.incoming)
+async def filter(client, message):
+    if message.text.startswith("/"):
         return
-    
-    if ("https://" or "http://") in update.text:
-        return
-    
-    query = re.sub(r"[1-2]\d{3}", "", update.text) # Targetting Only 1000 - 2999 😁
-    
-    if len(query) < 2:
-        return
-    
-    results = []
-    
-    global ACTIVE_CHATS
-    global FIND
-    
-    configs = await db.find_chat(group_id)
-    achats = ACTIVE_CHATS[str(group_id)] if ACTIVE_CHATS.get(str(group_id)) else await db.find_active(group_id)
-    ACTIVE_CHATS[str(group_id)] = achats
-    
-    if not configs:
-        return
-    
-    allow_video = configs["types"]["video"]
-    allow_audio = configs["types"]["audio"] 
-    allow_document = configs["types"]["document"]
-    
-    max_pages = configs["configs"]["max_pages"] # maximum page result of a query
-    pm_file_chat = configs["configs"]["pm_fchat"] # should file to be send from bot pm to user
-    max_results = configs["configs"]["max_results"] # maximum total result of a query
-    max_per_page = configs["configs"]["max_per_page"] # maximum buttom per page 
-    show_invite = configs["configs"]["show_invite_link"] # should or not show active chat invite link
-    
-    show_invite = (False if pm_file_chat == True else show_invite) # turn show_invite to False if pm_file_chat is True
-    
-    filters = await db.get_filters(group_id, query)
-    
-    if filters:
-        for filter in filters: # iterating through each files
-            file_name = filter.get("file_name")
-            file_type = filter.get("file_type")
-            file_link = filter.get("file_link")
-            file_size = int(filter.get("file_size", "0"))
-            
-            # from B to MiB
-            
-            if file_size < 1024:
-                file_size = f"[{file_size} B]"
-            elif file_size < (1024**2):
-                file_size = f"[{str(round(file_size/1024, 2))} KiB] "
-            elif file_size < (1024**3):
-                file_size = f"[{str(round(file_size/(1024**2), 2))} MiB] "
-            elif file_size < (1024**4):
-                file_size = f"[{str(round(file_size/(1024**3), 2))} GiB] "
-            
-            
-            file_size = "" if file_size == ("[0 B]") else file_size
-            
-            # add emoji down below inside " " if you want..
-            button_text = f"{file_size}{file_name}"
-            
-
-            if file_type == "video":
-                if allow_video: 
-                    pass
-                else:
-                    continue
-                
-            elif file_type == "audio":
-                if allow_audio:
-                    pass
-                else:
-                    continue
-                
-            elif file_type == "document":
-                if allow_document:
-                    pass
-                else:
-                    continue
-            
-            if len(results) >= max_results:
-                break
-            
-            if pm_file_chat: 
-                unique_id = filter.get("unique_id")
-                if not FIND.get("bot_details"):
-                    try:
-                        bot_= await bot.get_me()
-                        FIND["bot_details"] = bot_
-                    except FloodWait as e:
-                        asyncio.sleep(e.x)
-                        bot_= await bot.get_me()
-                        FIND["bot_details"] = bot_
-                
-                bot_ = FIND.get("bot_details")
-                file_link = f"https://t.me/{bot_.username}?start={unique_id}"
-            
-            results.append(
-                [
-                    InlineKeyboardButton(button_text, url=file_link)
-                ]
-            )
-        
-    else:
-        return # return if no files found for that query
-    
-
-    if len(results) == 0: # double check
-        return
-    
-    else:
-    
-        result = []
-        # seperating total files into chunks to make as seperate pages
-        result += [results[i * max_per_page :(i + 1) * max_per_page ] for i in range((len(results) + max_per_page - 1) // max_per_page )]
-        len_result = len(result)
-        len_results = len(results)
-        results = None # Free Up Memory
-        
-        FIND[query] = {"results": result, "total_len": len_results, "max_pages": max_pages} # TrojanzHex's Idea Of Dicts😅
-
-        # Add next buttin if page count is not equal to 1
-        if len_result != 1:
-            result[0].append(
-                [
-                    InlineKeyboardButton("Next ⏩", callback_data=f"navigate(0|next|{query})")
-                ]
-            )
-        
-        # Just A Decaration
-        result[0].append([
-            InlineKeyboardButton(f"🔰 Page 1/{len_result if len_result < max_pages else max_pages} 🔰", callback_data="ignore")
-        ])
-        
-        
-        # if show_invite is True Append invite link buttons
-        if show_invite:
-            
-            ibuttons = []
-            achatId = []
-            await gen_invite_links(configs, group_id, bot, update)
-            
-            for x in achats["chats"] if isinstance(achats, dict) else achats:
-                achatId.append(int(x["chat_id"])) if isinstance(x, dict) else achatId.append(x)
-
-            ACTIVE_CHATS[str(group_id)] = achatId
-            
-            for y in INVITE_LINK.get(str(group_id)):
-                
-                chat_id = int(y["chat_id"])
-                
-                if chat_id not in achatId:
-                    continue
-                
-                chat_name = y["chat_name"]
-                invite_link = y["invite_link"]
-                
-                if ((len(ibuttons)%2) == 0):
-                    ibuttons.append(
-                        [
-                            InlineKeyboardButton(f"⚜ {chat_name} ⚜", url=invite_link)
-                        ]
-                    )
-
-                else:
-                    ibuttons[-1].append(
-                        InlineKeyboardButton(f"⚜ {chat_name} ⚜", url=invite_link)
-                    )
-                
-            for x in ibuttons:
-                result[0].insert(0, x) #Insert invite link buttons at first of page
-                
-            ibuttons = None # Free Up Memory...
-            achatId = None
-            
-            
-        reply_markup = InlineKeyboardMarkup(result[0])
-
+    if AUTH_CHANNEL:
+        invite_link = await client.create_chat_invite_link(int(AUTH_CHANNEL))
         try:
-            await bot.send_message(
-                chat_id = update.chat.id,
-                text=f"Found {(len_results)} Results For Your Query: <code>{query}</code>",
-                reply_markup=reply_markup,
-                parse_mode="html",
-                reply_to_message_id=update.message_id
+            user = await client.get_chat_member(int(AUTH_CHANNEL), message.from_user.id)
+            if user.status == "kicked":
+                await client.send_message(
+                    chat_id=message.from_user.id,
+                    text="Sorry Sir, You are Banned to use me.",
+                    parse_mode="markdown",
+                    disable_web_page_preview=True
+                )
+                return
+        except UserNotParticipant:
+            await client.send_message(
+                chat_id=message.from_user.id,
+                text="**Please Join My Updates Channel to use this Bot!**",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("📢 Join Updates Channel 📢", url=invite_link.invite_link)
+                        ]
+                    ]
+                ),
+                parse_mode="markdown"
             )
-
-        except ButtonDataInvalid:
-            print(result[0])
-        
-        except Exception as e:
-            print(e)
-
-
-async def gen_invite_links(db, group_id, bot, update):
-    """
-    A Funtion To Generate Invite Links For All Active 
-    Connected Chats In A Group
-    """
-    chats = db.get("chat_ids")
-    global INVITE_LINK
-    
-    if INVITE_LINK.get(str(group_id)):
+            return
+        except Exception:
+            await client.send_message(
+                chat_id=message.from_user.id,
+                text="Something went Wrong.",
+                parse_mode="markdown",
+                disable_web_page_preview=True
+            )
+            return
+    if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
         return
+    if 2 < len(message.text) < 100:    
+        btn = []
+        search = message.text
+        mo_tech_yt = f"**🗂️ Title:** {search}\n**⭐ Rating:** {random.choice(RATING)}\n**🎭 Genre:** {random.choice(GENRES)}\n**📤 Uploaded by {message.chat.title}**"
+        files = await get_filter_results(query=search)
+        if files:
+            for file in files:
+                file_id = file.file_id
+                filename = f"[{get_size(file.file_size)}] {file.file_name}"
+                btn.append(
+                    [InlineKeyboardButton(text=f"{filename}",callback_data=f"pr0fess0r_99#{file_id}")]
+                    )
+        else:
+            await client.send_sticker(chat_id=message.from_user.id, sticker='CAADBQADMwIAAtbcmFelnLaGAZhgBwI')
+            return
+
+        if not btn:
+            return
+
+        if len(btn) > 10: 
+            btns = list(split_list(btn, 10)) 
+            keyword = f"{message.chat.id}-{message.message_id}"
+            BUTTONS[keyword] = {
+                "total" : len(btns),
+                "buttons" : btns
+            }
+        else:
+            buttons = btn
+            buttons.append(
+                [InlineKeyboardButton(text="📃 Pages 1/1",callback_data="pages")]
+            )
+            poster=None
+            if API_KEY:
+                poster=await get_poster(search)
+            if poster:
+                await message.reply_photo(photo=poster, caption=mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+
+            else:
+                await message.reply_text(mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+            return
+
+        data = BUTTONS[keyword]
+        buttons = data['buttons'][0].copy()
+
+        buttons.append(
+            [InlineKeyboardButton(text="NEXT ⏩",callback_data=f"next_0_{keyword}")]
+        )    
+        buttons.append(
+            [InlineKeyboardButton(text=f"📃 Pages 1/{data['total']}",callback_data="pages")]
+        )
+        poster=None
+        if API_KEY:
+            poster=await get_poster(search)
+        if poster:
+            await message.reply_photo(photo=poster, caption=mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+        else:
+            await message.reply_text(mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+
+@Client.on_message(filters.text & filters.group & filters.incoming & filters.chat(AUTH_GROUPS) if AUTH_GROUPS else filters.text & filters.group & filters.incoming)
+async def group(client, message):
+    if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
+        return
+    if 2 < len(message.text) < 50:    
+        btn = []
+        search = message.text
+        mo_tech_yt = f"**🗂️ Title:** {search}\n**⭐ Rating:** {random.choice(RATING)}\n**🎭 Genre:** {random.choice(GENRES)}\n**📤 Uploaded by {message.chat.title}**"
+        nyva=BOT.get("username")
+        if not nyva:
+            botusername=await client.get_me()
+            nyva=botusername.username
+            BOT["username"]=nyva
+        files = await get_filter_results(query=search)
+        if files:
+            for file in files:
+                file_id = file.file_id
+                filename = f"[{get_size(file.file_size)}] {file.file_name}"
+                btn.append(
+                    [InlineKeyboardButton(text=f"{filename}", url=f"https://telegram.dog/{nyva}?start=pr0fess0r_99_-_-_-_{file_id}")]
+                )
+        else:
+            LuciferMoringstar=await client.send_message(
+            chat_id = message.chat.id,
+            text=f"""
+👋Hey {message.from_user.mention}
+If this movie is not in our database you will not get that movie..
+Otherwise, the spelling of the name of the requested movie may not be correct...
+So you go to google and check the spelling of the name of the movie you want.
+ഈ സിനിമ ഞങ്ങളുടെ ഡാറ്റാബേസിൽ ഇല്ലെങ്കിൽ നിങ്ങൾക്ക് ഈ സിനിമ ലഭിക്കില്ല
+അല്ലെങ്കിൽ, അഭ്യർത്ഥിച്ച സിനിമയുടെ പേരിന്റെ അക്ഷരവിന്യാസം ശരിയായിരിക്കില്ല ...
+അതിനാൽ നിങ്ങൾ ഗൂഗിളിൽ പോയി നിങ്ങൾക്ക് ആവശ്യമുള്ള സിനിമയുടെ പേരിന്റെ സ്പെല്ലിംഗ് പരിശോധിക്കുക""",
+            parse_mode="html",
+            reply_to_message_id=message.message_id
+        )
+            return
+        if not btn:
+            return
+
+        if len(btn) > 10: 
+            btns = list(split_list(btn, 10)) 
+            keyword = f"{message.chat.id}-{message.message_id}"
+            BUTTONS[keyword] = {
+                "total" : len(btns),
+                "buttons" : btns
+            }
+        else:
+            buttons = btn
+            buttons.append(
+                [InlineKeyboardButton(text="📃 Pages 1/1",callback_data="pages")]
+            )
+            poster=None
+            if API_KEY:
+                poster=await get_poster(search)
+            if poster:
+                await message.reply_photo(photo=poster, caption=mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+            else:
+                await message.reply_text(mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+            return
+
+        data = BUTTONS[keyword]
+        buttons = data['buttons'][0].copy()
+
+        buttons.append(
+            [InlineKeyboardButton(text="NEXT ⏩",callback_data=f"next_0_{keyword}")]
+        )    
+        buttons.append(
+            [InlineKeyboardButton(text=f"📃 Pages 1/{data['total']}",callback_data="pages")]
+        )
+        poster=None
+        if API_KEY:
+            poster=await get_poster(search)
+        if poster:
+            await message.reply_photo(photo=poster, caption=mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+        else:
+            await message.reply_text(mo_tech_yt, reply_markup=InlineKeyboardMarkup(buttons))
+
     
-    Links = []
-    if chats:
-        for x in chats:
-            Name = x["chat_name"]
-            
-            if Name == None:
-                continue
-            
-            chatId=int(x["chat_id"])
-            
-            Link = await bot.export_chat_invite_link(chatId)
-            Links.append({"chat_id": chatId, "chat_name": Name, "invite_link": Link})
+def get_size(size):
+    """Get size in readable format"""
 
-        INVITE_LINK[str(group_id)] = Links
-    return 
+    units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
+    size = float(size)
+    i = 0
+    while size >= 1024.0 and i < len(units):
+        i += 1
+        size /= 1024.0
+    return "%.2f %s" % (size, units[i])
+
+def split_list(l, n):
+    for i in range(0, len(l), n):
+        yield l[i:i + n]          
 
 
-async def recacher(group_id, ReCacheInvite=True, ReCacheActive=False, bot=Bot, update=Message):
-    """
-    A Funtion To rechase invite links and active chats of a specific chat
-    """
-    global INVITE_LINK, ACTIVE_CHATS
 
-    if ReCacheInvite:
-        if INVITE_LINK.get(str(group_id)):
-            INVITE_LINK.pop(str(group_id))
-        
-        Links = []
-        chats = await db.find_chat(group_id)
-        chats = chats["chat_ids"]
-        
-        if chats:
-            for x in chats:
-                Name = x["chat_name"]
-                chat_id = x["chat_id"]
-                if (Name == None or chat_id == None):
-                    continue
+@Client.on_callback_query()
+async def cb_handler(client: Client, query: CallbackQuery):
+    clicked = query.from_user.id
+    try:
+        typed = query.message.reply_to_message.from_user.id
+    except:
+        typed = query.from_user.id
+        pass
+    if (clicked == typed):
+
+        if query.data.startswith("next"):
+            ident, index, keyword = query.data.split("_")
+            try:
+                data = BUTTONS[keyword]
+            except KeyError:
+                await query.answer("You are using this for one of my old message, please send the request again.",show_alert=True)
+                return
+
+            if int(index) == int(data["total"]) - 2:
+                buttons = data['buttons'][int(index)+1].copy()
+
+                buttons.append(
+                    [InlineKeyboardButton("⏪ BACK", callback_data=f"back_{int(index)+1}_{keyword}")]
+                )
+                buttons.append(
+                    [InlineKeyboardButton(f"📃 Pages {int(index)+2}/{data['total']}", callback_data="pages")]
+                )
+
+                await query.edit_message_reply_markup( 
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                return
+            else:
+                buttons = data['buttons'][int(index)+1].copy()
+
+                buttons.append(
+                    [InlineKeyboardButton("⏪ BACK", callback_data=f"back_{int(index)+1}_{keyword}"),InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{int(index)+1}_{keyword}")]
+                )
+                buttons.append(
+                    [InlineKeyboardButton(f"📃 Pages {int(index)+2}/{data['total']}", callback_data="pages")]
+                )
+
+                await query.edit_message_reply_markup( 
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                return
+
+
+        elif query.data.startswith("back"):
+            ident, index, keyword = query.data.split("_")
+            try:
+                data = BUTTONS[keyword]
+            except KeyError:
+                await query.answer("You are using this for one of my old message, please send the request again.",show_alert=True)
+                return
+
+            if int(index) == 1:
+                buttons = data['buttons'][int(index)-1].copy()
+
+                buttons.append(
+                    [InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{int(index)-1}_{keyword}")]
+                )
+                buttons.append(
+                    [InlineKeyboardButton(f"📃 Pages {int(index)}/{data['total']}", callback_data="pages")]
+                )
+
+                await query.edit_message_reply_markup( 
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                return   
+            else:
+                buttons = data['buttons'][int(index)-1].copy()
+
+                buttons.append(
+                    [InlineKeyboardButton("⏪ BACK", callback_data=f"back_{int(index)-1}_{keyword}"),InlineKeyboardButton("NEXT ⏩", callback_data=f"next_{int(index)-1}_{keyword}")]
+                )
+                buttons.append(
+                    [InlineKeyboardButton(f"📃 Pages {int(index)}/{data['total']}", callback_data="pages")]
+                )
+
+                await query.edit_message_reply_markup( 
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                return
+        elif query.data == "help":
+            buttons = [[
+                InlineKeyboardButton('Update Channel', url='t.me/Mo_Tech_YT'),
+                InlineKeyboardButton('Source Code', url="https://github.com/PR0FESS0R-99/LuciferMoringstar_Robot")
+                ],[
+                InlineKeyboardButton('💫Deploy Video💫', url=f'{TUTORIAL}')
+                ]]
+            await query.message.edit(text=f"{HELP}", reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
+
+        elif query.data == "about":
+            buttons = [
+                [
+                    InlineKeyboardButton('Update Channel', url='t.me/Mo_Tech_YT'),
+                    InlineKeyboardButton('Source Code', url=f'{TUTORIAL}')
+                ]
+                ]
+            await query.message.edit(text=f"{ABOUT}".format(TUTORIAL), reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
+
+
+        elif query.data.startswith("pr0fess0r_99"):
+            ident, file_id = query.data.split("#")
+            filedetails = await get_file_details(file_id)
+            for files in filedetails:
+                title = files.file_name
+                size=files.file_size
+                f_caption=files.caption
+                if CUSTOM_FILE_CAPTION:
+                    try:
+                        f_caption=CUSTOM_FILE_CAPTION.format(file_name=title, file_size=size, file_caption=f_caption)
+                    except Exception as e:
+                        print(e)
+                        f_caption=f_caption
+                if f_caption is None:
+                    f_caption = f"{files.file_name}"
+                buttons = [
+                    [
+                        InlineKeyboardButton('💫 DEPLOY VIDEO 💫', url=f'{TUTORIAL}')
+                    ]
+                    ]
                 
-                chat_id = int(chat_id)
+                await query.answer()
+                await client.send_cached_media(
+                    chat_id=query.from_user.id,
+                    file_id=file_id,
+                    caption=f_caption,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                    )
+        elif query.data.startswith("checksub"):
+            if AUTH_CHANNEL and not await is_subscribed(client, query):
+                await query.answer("I Like Your Smartness, But Don't Be Oversmart 😒",show_alert=True)
+                return
+            ident, file_id = query.data.split("#")
+            filedetails = await get_file_details(file_id)
+            for files in filedetails:
+                title = files.file_name
+                size=files.file_size
+                f_caption=files.caption
+                if CUSTOM_FILE_CAPTION:
+                    try:
+                        f_caption=CUSTOM_FILE_CAPTION.format(file_name=title, file_size=size, file_caption=f_caption)
+                    except Exception as e:
+                        print(e)
+                        f_caption=f_caption
+                if f_caption is None:
+                    f_caption = f"{title}"
+                buttons = [
+                    [
+                        InlineKeyboardButton('🖥️ How To Own 🖥️', url=f'{TUTORIAL}')
+                    ]
+                    ]
                 
-                Link = await bot.export_chat_invite_link(chat_id)
-                Links.append({"chat_id": chat_id, "chat_name": Name, "invite_link": Link})
+                await query.answer()
+                await client.send_cached_media(
+                    chat_id=query.from_user.id,
+                    file_id=file_id,
+                    caption=f_caption,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                    )
 
-            INVITE_LINK[str(group_id)] = Links
-    
-    if ReCacheActive:
-        
-        if ACTIVE_CHATS.get(str(group_id)):
-            ACTIVE_CHATS.pop(str(group_id))
-        
-        achats = await db.find_active(group_id)
-        achatId = []
-        if achats:
-            for x in achats["chats"]:
-                achatId.append(int(x["chat_id"]))
-            
-            ACTIVE_CHATS[str(group_id)] = achatId
-    return 
+
+        elif query.data == "pages":
+            await query.answer()
+    else:
+        await query.answer("കൌതുകും ലേശം കൂടുതൽ ആണല്ലേ👀",show_alert=True)
