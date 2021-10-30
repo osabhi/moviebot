@@ -289,18 +289,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
         elif query.data == "help":
             buttons = [[
-                InlineKeyboardButton('Update Channel', url='t.me/Mo_Tech_YT'),
-                InlineKeyboardButton('Source Code', url="https://github.com/PR0FESS0R-99/LuciferMoringstar_Robot")
-                ],[
-                InlineKeyboardButton('💫Deploy Video💫', url=f'{TUTORIAL}')
+                InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/Mw_chats'),
+                InlineKeyboardButton('🔰𝖢𝗁𝖺𝗇𝗇𝖾𝗅🔰', url="t.me/Mw_all")
                 ]]
             await query.message.edit(text=f"{HELP}", reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
 
         elif query.data == "about":
             buttons = [
                 [
-                    InlineKeyboardButton('Update Channel', url='t.me/Mo_Tech_YT'),
-                    InlineKeyboardButton('Source Code', url=f'{TUTORIAL}')
+                    InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/Mw_chats'),
+                    InlineKeyboardButton('🔰𝖢𝗁𝖺𝗇𝗇𝖾𝗅🔰', url="t.me/Mw_all")
                 ]
                 ]
             await query.message.edit(text=f"{ABOUT}".format(TUTORIAL), reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
@@ -323,7 +321,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     f_caption = f"{files.file_name}"
                 buttons = [
                     [
-                        InlineKeyboardButton('💫 DEPLOY VIDEO 💫', url=f'{TUTORIAL}')
+                        InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/Mw_chats')
                     ]
                     ]
                 
@@ -354,7 +352,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     f_caption = f"{title}"
                 buttons = [
                     [
-                        InlineKeyboardButton('🖥️ How To Own 🖥️', url=f'{TUTORIAL}')
+                        InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/Mw_chats')
                     ]
                     ]
                 
