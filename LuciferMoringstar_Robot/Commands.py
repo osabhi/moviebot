@@ -87,7 +87,7 @@ async def start(bot, message):
                         InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/Mw_chats')
                     ],
                     [
-                        InlineKeyboardButton('🔍 Search again 🔎', switch_inline_query_current_chat='')
+                        InlineKeyboardButton('🔍 𝖲𝖾𝖺𝗋𝖼𝗁 𝖠𝗀𝖺𝗂𝗇 🔎', switch_inline_query_current_chat='')
                     ]
                     ]
                 await bot.send_cached_media(
@@ -121,7 +121,7 @@ async def start(bot, message):
                     [
                         InlineKeyboardButton
                             (
-                                "🔎𝖲𝖾𝖺𝗋𝖼𝗁", switch_inline_query_current_chat=''
+                                "🔎𝖲𝖾𝖺𝗋𝖼𝗁 𝖧𝖾𝗋𝖾", switch_inline_query_current_chat=''
                             ),
                         InlineKeyboardButton
                             (
