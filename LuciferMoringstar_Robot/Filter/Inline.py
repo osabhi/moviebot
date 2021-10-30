@@ -92,7 +92,7 @@ def get_reply_markup(query):
         InlineKeyboardButton('🔰𝖦𝗋𝗈𝗎𝗉🔰', url='t.me/MW_chats'),
         InlineKeyboardButton('🔰𝖢𝗁𝖺𝗇𝗇𝖾𝗅🔰', url='t.me/Mw_all')
         ],[
-        InlineKeyboardButton('🔍 Search again 🔎', switch_inline_query_current_chat=query)
+        InlineKeyboardButton('🔍 𝖲𝖾𝖺𝗋𝖼𝗁 𝖠𝗀𝖺𝗂𝗇 🔎', switch_inline_query_current_chat=query)
         ]]
     return InlineKeyboardMarkup(buttons)
 
